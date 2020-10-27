@@ -48,8 +48,10 @@ def tokenize(input_str):
         pos = mo.start()
 
         if kind == 'NUMBER':
-            value = float(value.replace(',',
-                                        '.')) if ',' in value else int(value)
+            if ',' in value:
+                value = float(value.replace(',', '.'))
+            else:
+                value = int(value)
         elif kind == 'ID' and value.upper() in keywords:
             kind = value.upper()
         elif kind == 'ID' and value.upper() in constant:
@@ -109,19 +111,20 @@ def parse(tokens):
                 (_, _, pos) = stack.pop()
                 stack.append((kind, -value, pos))
                 expect = 'OPERATION'
-            elif expect == 'OPERAND' or expect == 'NEG_OPERAND':
+            elif expect in ['OPERAND', 'NEG_OPERAND']:
                 if expect == 'NEG_OPERAND':
                     (_, _, pos) = stack.pop()
                     token = (kind, -value, pos)
                 stack.append(token)
                 if len(stack) >= 2 and stack[-2][0] == 'OP':
                     stack[-1], stack[-2] = stack[-2], stack[-1]
-                    if len(stack) >= 3 and stack[-1][1] in (
-                            '*', '/') and stack[-2][0] == 'NUMBER' and stack[
-                                -3][0] == 'OP' and stack[-3][1] in ('+', '-'):
+                    if (len(stack) >= 3
+                            and stack[-1][1] in ('*', '/')
+                            and stack[-2][0] == 'NUMBER'
+                            and stack[-3][0] == 'OP'
+                            and stack[-3][1] in ('+', '-')):
                         # '*','/' before '+','-'
-                        stack[-3], stack[-2], stack[-1] = stack[-2], stack[
-                            -1], stack[-3]
+                        stack[-3:] = stack[-2], stack[-1], stack[-3]
                 expect = 'OPERATION'
             else:
                 raise ParseSyntaxError(value, expect, pos)
@@ -167,8 +170,10 @@ def parse(tokens):
             elif expect == 'OPERAND':
                 prev_op = None
                 last_op = stack.pop()
-                if last_op[1] in ('*', '/') and len(stack) >= 1 and stack[-1][
-                        0] == 'OP' and stack[-1][1] in ('+', '-'):
+                if (last_op[1] in ('*', '/')
+                        and len(stack) >= 1
+                        and stack[-1][0] == 'OP'
+                        and stack[-1][1] in ('+', '-')):
                     # '*','/' before '+','-'
                     prev_op = stack.pop()
                 stack.extend(stack_token)
