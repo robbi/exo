@@ -1,9 +1,10 @@
 import re
 import math
 import readline
+from collections import namedtuple
 
 PROMPT = '#> '
-
+Token = namedtuple('Token', ['kind', 'value', 'pos'])
 
 class ParseError(Exception):
     def __init__(self, message, position):
@@ -60,8 +61,8 @@ def tokenize(input_str):
             value = constant[name]
         elif kind == 'SKIP':
             continue
-        yield (kind, value, pos)
-    yield ('EOF', '', len(input_str))
+        yield Token(kind, value, pos)
+    yield Token('EOF', '', len(input_str))
 
 
 def reduce_rpn(stack):
@@ -109,20 +110,20 @@ def parse(tokens):
                 expect = 'OPERATION'
             elif expect == 'NEG_EXPR':
                 (_, _, pos) = stack.pop()
-                stack.append((kind, -value, pos))
+                stack.append(Token(kind, -value, pos))
                 expect = 'OPERATION'
             elif expect in ['OPERAND', 'NEG_OPERAND']:
                 if expect == 'NEG_OPERAND':
                     (_, _, pos) = stack.pop()
-                    token = (kind, -value, pos)
+                    token = Token(kind, -value, pos)
                 stack.append(token)
-                if len(stack) >= 2 and stack[-2][0] == 'OP':
+                if len(stack) >= 2 and stack[-2].kind == 'OP':
                     stack[-1], stack[-2] = stack[-2], stack[-1]
                     if (len(stack) >= 3
-                            and stack[-1][1] in ('*', '/')
-                            and stack[-2][0] == 'NUMBER'
-                            and stack[-3][0] == 'OP'
-                            and stack[-3][1] in ('+', '-')):
+                            and stack[-1].value in ('*', '/')
+                            and stack[-2].kind == 'NUMBER'
+                            and stack[-3].kind == 'OP'
+                            and stack[-3].value in ('+', '-')):
                         # '*','/' before '+','-'
                         stack[-3:] = stack[-2], stack[-1], stack[-3]
                 expect = 'OPERATION'
@@ -156,7 +157,7 @@ def parse(tokens):
         elif kind == 'PCLOSE':
             if len(subexpr) == 0 or expect != 'OPERATION':
                 raise ParseSyntaxError(value, expect, pos)
-            stack.append(('NOP', 0, pos))
+            stack.append(Token('NOP', 0, pos))
             stack_token = stack
             stack, expect = subexpr.pop()
             if expect == 'EXPR':
@@ -170,10 +171,10 @@ def parse(tokens):
             elif expect == 'OPERAND':
                 prev_op = None
                 last_op = stack.pop()
-                if (last_op[1] in ('*', '/')
+                if (last_op.value in ('*', '/')
                         and len(stack) >= 1
-                        and stack[-1][0] == 'OP'
-                        and stack[-1][1] in ('+', '-')):
+                        and stack[-1].kind == 'OP'
+                        and stack[-1].value in ('+', '-')):
                     # '*','/' before '+','-'
                     prev_op = stack.pop()
                 stack.extend(stack_token)
