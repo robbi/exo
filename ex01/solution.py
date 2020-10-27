@@ -4,6 +4,7 @@ import readline
 
 PROMPT = '#> '
 
+
 class ParseError(Exception):
     def __init__(self, message, position):
         self.msg = message
@@ -21,30 +22,34 @@ class ParseSyntaxError(ParseError):
         'OPERAND': 'opérande attendue',
         'NEG_OPERAND': 'chiffre attendu',
     }
+
     def __init__(self, value, expected, position):
-        super().__init__(f'{ParseSyntaxError.TRAD[expected]}, "{value}" trouvé', position)
+        super().__init__(
+            f'{ParseSyntaxError.TRAD[expected]}, "{value}" trouvé', position)
 
 
 def tokenize(input_str):
     keywords = {}
     constant = {'PI': math.pi}
     token_specification = [
-        ('NUMBER',   r'\d+(?:,\d*)?'), # Entier ou décimal
-        ('OP',       r'[+\-*/]'),      # Opérateur arithmétique
-        ('OPEN',     r'\('),           # Parenthèse ouvrante
-        ('CLOSE',    r'\)'),           # Parenthèse fermante
-        ('ID',       r'[A-Za-z]+'),    # Identifiant
-        ('SKIP',     r'\s+'),          # Passe les espaces
-        ('MISMATCH', r'.'),            # Tout autre caractère
+        ('NUMBER', r'\d+(?:,\d*)?'),  # Entier ou décimal
+        ('OP', r'[+\-*/]'),  # Opérateur arithmétique
+        ('POPEN', r'\('),  # Parenthèse ouvrante
+        ('PCLOSE', r'\)'),  # Parenthèse fermante
+        ('ID', r'[A-Za-z]+'),  # Identifiant
+        ('SKIP', r'\s+'),  # Passe les espaces
+        ('MISMATCH', r'.'),  # Tout autre caractère
     ]
-    tok_regex = '|'.join(f'(?P<{name}>{regex})' for (name, regex) in token_specification)
+    tok_regex = '|'.join(
+        f'(?P<{name}>{regex})' for (name, regex) in token_specification)
     for mo in re.finditer(tok_regex, input_str):
         kind = mo.lastgroup
         value = mo.group()
         pos = mo.start()
-        
+
         if kind == 'NUMBER':
-            value = float(value.replace(',', '.')) if ',' in value else int(value)
+            value = float(value.replace(',',
+                                        '.')) if ',' in value else int(value)
         elif kind == 'ID' and value.upper() in keywords:
             kind = value.upper()
         elif kind == 'ID' and value.upper() in constant:
@@ -54,6 +59,7 @@ def tokenize(input_str):
         elif kind == 'SKIP':
             continue
         yield (kind, value, pos)
+    yield ('EOF', '', len(input_str))
 
 
 def reduce_rpn(stack):
@@ -66,7 +72,7 @@ def reduce_rpn(stack):
             if value == '+':
                 result = values.pop() + values.pop()
             elif value == '-':
-                result = - values.pop() + values.pop()
+                result = -values.pop() + values.pop()
             elif value == '*':
                 result = values.pop() * values.pop()
             elif value == '/':
@@ -84,18 +90,17 @@ def reduce_rpn(stack):
     return values.pop()
 
 
-def parse(input_str):
+def parse(tokens):
     stack = []
     subexpr = []
     expect = 'EXPR'
 
-    for token in tokenize(input_str):
+    for token in tokens:
         (kind, value, pos) = token
 
         if kind == 'MISMATCH':
             raise ParseError(f'Erreur : entrée inconnue {value}', pos)
-            
-        
+
         elif kind == 'NUMBER':
             if expect == 'EXPR':
                 stack.append(token)
@@ -111,9 +116,12 @@ def parse(input_str):
                 stack.append(token)
                 if len(stack) >= 2 and stack[-2][0] == 'OP':
                     stack[-1], stack[-2] = stack[-2], stack[-1]
-                    if len(stack) >= 3 and stack[-1][1] in ('*', '/') and stack[-2][0] == 'NUMBER' and stack[-3][0] == 'OP' and stack[-3][1] in ('+', '-'):
+                    if len(stack) >= 3 and stack[-1][1] in (
+                            '*', '/') and stack[-2][0] == 'NUMBER' and stack[
+                                -3][0] == 'OP' and stack[-3][1] in ('+', '-'):
                         # '*','/' before '+','-'
-                        stack[-3], stack[-2], stack[-1] = stack[-2], stack[-1], stack[-3]
+                        stack[-3], stack[-2], stack[-1] = stack[-2], stack[
+                            -1], stack[-3]
                 expect = 'OPERATION'
             else:
                 raise ParseSyntaxError(value, expect, pos)
@@ -130,8 +138,8 @@ def parse(input_str):
                 expect = 'OPERAND'
             else:
                 raise ParseSyntaxError(value, expect, pos)
-                    
-        elif kind == 'OPEN':
+
+        elif kind == 'POPEN':
             if expect in ['EXPR', 'OPERAND']:
                 pass
             elif expect == 'NEG_EXPR':
@@ -141,8 +149,8 @@ def parse(input_str):
                 raise ParseSyntaxError(value, expect, pos)
             subexpr.append((stack, expect))
             stack, expect = [], 'EXPR'
-                    
-        elif kind == 'CLOSE':
+
+        elif kind == 'PCLOSE':
             if len(subexpr) == 0 or expect != 'OPERATION':
                 raise ParseSyntaxError(value, expect, pos)
             stack.append(('NOP', 0, pos))
@@ -159,11 +167,10 @@ def parse(input_str):
             elif expect == 'OPERAND':
                 prev_op = None
                 last_op = stack.pop()
-                if last_op[1] in ('*', '/') and len(stack) >= 1 and stack[-1][0] == 'OP' and stack[-1][1] in ('+', '-'):
+                if last_op[1] in ('*', '/') and len(stack) >= 1 and stack[-1][
+                        0] == 'OP' and stack[-1][1] in ('+', '-'):
                     # '*','/' before '+','-'
                     prev_op = stack.pop()
-                print(f"DEBUG last_op={last_op!r}")
-                print(f"DEBUG prev_op={prev_op!r}")
                 stack.extend(stack_token)
                 stack.append(last_op)
                 if prev_op is not None:
@@ -172,20 +179,22 @@ def parse(input_str):
             else:
                 raise ParseSyntaxError(value, expect, pos)
 
+        elif kind == 'EOF':
+            if expect != 'OPERATION':
+                raise ParseSyntaxError('FIN', expect, pos)
+            if len(subexpr) > 0:
+                raise ParseError('")" manquante', len(input_str))
+
         else:
             raise ParseSyntaxError(value, expect, pos)
-    
-    if expect != 'OPERATION':
-        raise ParseSyntaxError('FIN', expect, len(input_str))
-    if len(subexpr) > 0:
-        raise ParseError('")" manquante', len(input_str))
+
     return stack
 
 
 def calc(input_str):
-    stack = parse(input_str)
-    print(f"DEBUG stack={stack!r}")
-    result = reduce_rpn(stack)
+    tokens = tokenize(input_str)
+    tree = parse(tokens)
+    result = reduce_rpn(tree)
     return result
 
 
@@ -201,4 +210,4 @@ if __name__ == "__main__":
         except ParseError as e:
             print(e)
         except ZeroDivisionError:
-            print("Erreur : division par zero")            
+            print("Erreur : division par zero")
